@@ -1,0 +1,68 @@
+# rdns-lookup configuration — copy to ~/.config/rdns-lookup/config.toml
+#
+# Every setting is optional; the values shown are the built-in defaults.
+# Precedence is: flag > environment variable > this file > built-in default.
+#
+# There are no credentials here. ip.thc.org has no authentication mechanism,
+# so there is nothing secret to protect in this file.
+
+[api]
+# API root. Override only to point at a mirror or a test server.
+# The RDNS_LOOKUP_BASE_URL environment variable overrides this value.
+# base_url = "https://ip.thc.org/api/v1"
+
+[query]
+# Records returned when neither --limit nor --all is given. 100 is the JSON
+# face's real ceiling, so the default costs exactly one upstream request.
+# The RDNS_LOOKUP_DEFAULT_LIMIT environment variable overrides this value.
+# default_limit = 100
+
+# Ceiling for --all. Cannot exceed 50000: the CSV face accepts no more in one
+# request and cannot paginate, and walking further through the JSON face would
+# cost hundreds of requests against a 0.5 req/sec budget. Results always report
+# how many records upstream holds, so a capped answer is visible as such.
+# The RDNS_LOOKUP_MAX_ALL environment variable overrides this value.
+# max_all = 50000
+
+# Drop rows upstream returns more than once. It emits the same domain twice —
+# once with an empty tld and once populated — for roughly 15% of rows on a /24.
+# Turn this off only to inspect the raw index.
+# The RDNS_LOOKUP_DEDUP environment variable overrides this value.
+# dedup = true
+
+[cache]
+# How long a cached answer stays fresh. The upstream index is historical and
+# changes slowly, so a day keeps repeated triage of the same indicator down to
+# a single request. Caching is also a courtesy to a free service.
+# The RDNS_LOOKUP_CACHE_TTL_HOURS environment variable overrides this value.
+# ttl_hours = 24
+
+# Cache directory. Defaults to $XDG_CACHE_HOME/rdns-lookup, else
+# ~/.cache/rdns-lookup.
+# The RDNS_LOOKUP_CACHE_DIR environment variable overrides this value.
+# dir = "~/.cache/rdns-lookup"
+
+[network]
+# Timeout per HTTPS exchange. A 50,000-row CSV response takes noticeably
+# longer than a JSON page, hence the generous default.
+# The RDNS_LOOKUP_TIMEOUT_SECONDS environment variable overrides this value.
+# timeout_seconds = 30
+
+[ratelimit]
+# Bulk runs pause for replenishment when the upstream budget (250 burst,
+# refilling at 0.5/sec) falls to this level. Lowering it makes bulk runs
+# faster and less polite; the service explicitly asks not to be abused.
+# The RDNS_LOOKUP_MIN_REMAINING environment variable overrides this value.
+# min_remaining = 20
+
+[mcp]
+# Records an MCP tool returns inline before writing them to a file instead.
+# An agent's context is scarcer than disk, and one lookup can return tens of
+# thousands of records.
+# The RDNS_LOOKUP_MCP_INLINE_MAX environment variable overrides this value.
+# inline_max_records = 200
+
+# Default directory for file-mediated MCP results, used when a tool call does
+# not pass workspace_root. With neither set, large results are capped inline.
+# The RDNS_LOOKUP_WORKSPACE environment variable overrides this value.
+# workspace = "~/.cache/rdns-lookup/workspace"
