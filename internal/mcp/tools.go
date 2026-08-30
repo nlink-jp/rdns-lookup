@@ -131,15 +131,14 @@ func (s *server) toolsCall(params json.RawMessage) (toolResult, *rpcError) {
 // toolArgs is the union of the three lookup tools' arguments; each tool reads
 // only the target field that belongs to it.
 type toolArgs struct {
-	IPAddress     string   `json:"ip_address"`
-	Domain        string   `json:"domain"`
-	TargetDomain  string   `json:"target_domain"`
-	Limit         int      `json:"limit"`
-	All           bool     `json:"all"`
-	TLD           []string `json:"tld"`
-	ApexDomain    string   `json:"apex_domain"`
-	Refresh       bool     `json:"refresh"`
-	WorkspaceRoot string   `json:"workspace_root"`
+	IPAddress    string   `json:"ip_address"`
+	Domain       string   `json:"domain"`
+	TargetDomain string   `json:"target_domain"`
+	Limit        int      `json:"limit"`
+	All          bool     `json:"all"`
+	TLD          []string `json:"tld"`
+	ApexDomain   string   `json:"apex_domain"`
+	Refresh      bool     `json:"refresh"`
 }
 
 func (s *server) toolLookup(kind thc.Kind, raw json.RawMessage) toolResult {

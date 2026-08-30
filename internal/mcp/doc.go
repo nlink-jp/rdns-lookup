@@ -4,8 +4,10 @@
 // CLI so their behaviour cannot diverge. Diagnostics must go to stderr only;
 // stdout carries the protocol.
 //
-// Because one lookup can return tens of thousands of records, results above a
-// configured threshold are written to a file under workspace_root and only the
-// path plus a count summary is returned — an agent's context is a scarcer
-// resource than disk.
+// Every record retrieved is returned inline: the server writes no files, owns
+// no output directory and takes no path argument, so it works unchanged against
+// a client that has no filesystem of its own. One lookup can return tens of
+// thousands of records, so `limit` (and `all`) is what bounds a response —
+// deciding what is too big for a model belongs to the client, which is the only
+// side that knows the context window.
 package mcp
