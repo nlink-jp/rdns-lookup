@@ -67,7 +67,7 @@ func Load(configPath string, timeoutOverride time.Duration) (*Config, error) {
 	}
 	if configPath != "" {
 		if f, err := os.Open(configPath); err == nil {
-			defer f.Close()
+			defer func() { _ = f.Close() }()
 			sections, perr := parseTOML(f)
 			if perr != nil {
 				return nil, fmt.Errorf("parse config %s: %w", configPath, perr)

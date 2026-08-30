@@ -142,7 +142,7 @@ func readTargets(positionals []string, inputPath string, in io.Reader) ([]string
 		if err != nil {
 			return nil, err
 		}
-		defer f.Close()
+		defer func() { _ = f.Close() }()
 		targets = append(targets, scanTargets(f)...)
 	} else if len(targets) == 0 {
 		targets = append(targets, scanTargets(in)...)

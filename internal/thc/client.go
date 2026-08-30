@@ -368,7 +368,7 @@ func (c *Client) do(req *http.Request) ([]byte, RateLimit, error) {
 	if err != nil {
 		return nil, RateLimit{Limit: -1, Remaining: -1}, err
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, maxBody))
 	if err != nil {
