@@ -55,7 +55,6 @@ func newEngine(t *testing.T, f *thc.Page, more ...*thc.Page) (*Engine, *fakeFetc
 		CacheDir:     t.TempDir(),
 		CacheTTL:     24 * time.Hour,
 		MinRemaining: 20,
-		MCPInlineMax: 200,
 	}
 	pages := []*thc.Page{}
 	if f != nil {

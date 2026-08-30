@@ -40,7 +40,6 @@ internal/thc/                Upstream client: 3 JSON endpoints + 3 CSV endpoints
 internal/cache/              Fixed-TTL JSON-file cache, atomic writes
 internal/config/             Sectioned-TOML subset + RDNS_LOOKUP_* env
 internal/engine/             Shared core: route selection, cache, dedup, truncation, pacing
-internal/workspace/          File-mediated MCP output, doubly contained
 internal/app/                CLI shell: subcommand dispatch, flags, text/JSON rendering
 internal/mcp/                Zero-dep stdio JSON-RPC 2.0 server + embedded usage.md
 ```

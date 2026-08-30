@@ -20,21 +20,20 @@ Domains associated with an IP address or IP block.
 - `tld` (array of string, optional) — TLD filter, e.g. `["com"]`. **Single addresses only.** Upstream silently ignores it for blocks, so passing it with a block is an `invalid_input` error rather than a filter that quietly does nothing.
 - `apex_domain` (string, optional) — apex-domain filter, e.g. `example.com`. Single addresses only, for the same reason.
 - `refresh` (boolean, optional) — bypass the local cache and re-query.
-- `workspace_root` (string, optional) — directory to write results into when they exceed the inline limit.
 
 ### `lookup_subdomains`
 
 Subdomains of a domain. Each record carries `last_seen_on`, which is the freshness signal — an old date means the name was indexed once, not that it resolves today.
 
 - `domain` (string, required) — domain name, IDN accepted.
-- `limit`, `all`, `refresh`, `workspace_root` — as above.
+- `limit`, `all`, `refresh` — as above.
 
 ### `lookup_cnames`
 
 Domains that point a CNAME at the given target — the reverse of an ordinary CNAME lookup. Useful for finding who depends on a hosting target.
 
 - `target_domain` (string, required) — the CNAME target to search for, e.g. `github.io`.
-- `limit`, `all`, `refresh`, `workspace_root` — as above.
+- `limit`, `all`, `refresh` — as above.
 
 ### `cache_status`
 
@@ -80,20 +79,13 @@ No arguments. Reports the cache directory, entry count, TTL, and the default and
 - `route` — which upstream face answered: `json` (paginates, up to 100 rows per request) or `csv` (up to 50,000 rows in one request, no pagination). Chosen automatically from the record count you asked for.
 - `rate_limit` — the shared upstream budget. `remaining` of `-1` means upstream said nothing. Bulk work paces itself against this automatically.
 
-### Large results
+### Sizing a result
 
-Above the inline limit (default 200 records) the response changes shape: `records` is omitted and the rows are written as JSONL instead.
+Every record retrieved comes back inline. This server writes no files, owns no output directory and takes no path argument, so it works against a client that has no filesystem of its own.
 
-```json
-{
-  "result": { "kind": "rdns", "count": 4210, "matching_records": 4210, "...": "..." },
-  "records_file": "/path/to/workspace/rdns-142.251.43.0_24.jsonl",
-  "records_count": 4210,
-  "format": "JSONL, one record object per line"
-}
-```
+That makes `limit` the knob that bounds a response: it is the number of records fetched from upstream, and every one of them is returned. One lookup can pull tens of thousands of rows with `all`, so ask for what you can hold.
 
-Pass `workspace_root` to receive the file. Without it (and without a server-configured workspace) the record list is capped inline and `truncation_note` says so.
+`truncated` and `matching_records` are a different signal, and they still mean what they always did: the index holds more than you retrieved. Raise `limit` (or set `all`) to reach the rest — that was never something a file could give you, because the file only ever held what `limit` had already fetched.
 
 ## Error recovery
 
@@ -104,7 +96,6 @@ Tool errors are structured JSON: `{"code": ..., "message": ...}`.
 | `invalid_input` | The target failed validation, or a filter was combined with a block. | Read the message: it names the specific problem. For a CIDR block, use `/8`, `/16`, `/24`, or `/32`. For `tld`/`apex_domain`, query a single address, or filter the returned records yourself. |
 | `rate_limited` | The upstream budget is spent. | Wait for replenishment — roughly 0.5 requests per second, 250 burst — then retry. Do not loop immediately. |
 | `network_error` | The request failed, or upstream returned an unexpected status. | Retry once; if it persists, ip.thc.org is likely down. There is no alternative source for this data. |
-| `workspace_error` | The output directory could not be created or written. | Pass a `workspace_root` that exists and is writable, or omit it to receive a capped inline result. |
 
 Finding nothing indexed is **not** an error: the tool returns a normal result with `count` of 0. That is a real answer about the target.
 

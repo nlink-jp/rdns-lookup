@@ -55,14 +55,3 @@
 # The RDNS_LOOKUP_MIN_REMAINING environment variable overrides this value.
 # min_remaining = 20
 
-[mcp]
-# Records an MCP tool returns inline before writing them to a file instead.
-# An agent's context is scarcer than disk, and one lookup can return tens of
-# thousands of records.
-# The RDNS_LOOKUP_MCP_INLINE_MAX environment variable overrides this value.
-# inline_max_records = 200
-
-# Default directory for file-mediated MCP results, used when a tool call does
-# not pass workspace_root. With neither set, large results are capped inline.
-# The RDNS_LOOKUP_WORKSPACE environment variable overrides this value.
-# workspace = "~/.cache/rdns-lookup/workspace"

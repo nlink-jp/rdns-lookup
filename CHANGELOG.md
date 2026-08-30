@@ -4,6 +4,29 @@ All notable changes to this project are documented here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- **Every record retrieved is returned inline.** The MCP tools no longer write
+  a JSONL file past an inline cap, and no longer cap the list when there is
+  nowhere to write. `limit` (and `all`) is what bounds a response: it is the
+  number of records fetched from upstream, and every one of them comes back.
+
+  This costs no reachability. The file only ever held what `limit` had already
+  fetched, so it never reached past `limit` either — `truncated` and
+  `matching_records` remain the signal that the index holds more, and raising
+  `limit` remains the way to get it.
+
+### Removed
+
+- `workspace_root` from `lookup_rdns`, `lookup_subdomains` and `lookup_cnames`,
+  and the `records_file` / `records_count` / `format` response shape.
+- The `workspace_error` error code.
+- `[mcp] inline_max_records` / `RDNS_LOOKUP_MCP_INLINE_MAX` and `[mcp] workspace`
+  / `RDNS_LOOKUP_WORKSPACE`. The server has no output directory: it touches no
+  filesystem, so it works unchanged against a client that has none.
+
 ## [0.1.0] - 2026-07-30
 
 ### Added

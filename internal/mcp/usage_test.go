@@ -35,7 +35,7 @@ func TestUsageMentionsEveryTool(t *testing.T) {
 
 func TestUsageDocumentsErrorCodes(t *testing.T) {
 	// Every code errorResult can emit; see its doc comment.
-	for _, code := range []string{"invalid_input", "network_error", "rate_limited", "workspace_error"} {
+	for _, code := range []string{"invalid_input", "network_error", "rate_limited"} {
 		if !strings.Contains(usageMarkdown, code) {
 			t.Errorf("usage.md never documents the error code %q", code)
 		}

@@ -83,7 +83,7 @@ $ rdns-lookup rdns 142.251.43.46 --limit 4
 rdns-lookup mcp
 ```
 
-ツール: `lookup_rdns` / `lookup_subdomains` / `lookup_cnames` / `cache_status` / `get_usage`。**まず `get_usage` を呼んでください** — ツールリファレンス、結果スキーマ、エラー回復表が返ります。ツールエラーは構造化 JSON（`{code, message}`）です。索引にヒットしないことは通常の結果であり、エラーではありません。200 件を超える結果は `workspace_root` 配下に JSONL で書き出し、パスと件数サマリのみを返すため、エージェントのコンテキストを溢れさせません。
+ツール: `lookup_rdns` / `lookup_subdomains` / `lookup_cnames` / `cache_status` / `get_usage`。**まず `get_usage` を呼んでください** — ツールリファレンス、結果スキーマ、エラー回復表が返ります。ツールエラーは構造化 JSON（`{code, message}`）です。索引にヒットしないことは通常の結果であり、エラーではありません。取得したレコードは常にすべてインラインで返ります。サーバーはファイルを書かずパス引数も取らないので、ファイルシステムを持たないクライアントでも動作します。応答量を決めるのは `limit` です。`truncated` と `matching_records` は別の signal で、索引に取得件数より多く存在することを示します。
 
 Claude Code への登録:
 
@@ -112,8 +112,6 @@ Claude Code への登録:
 | キャッシュディレクトリ | `[cache] dir` | `RDNS_LOOKUP_CACHE_DIR` | `~/.cache/rdns-lookup` |
 | ネットワークタイムアウト | `[network] timeout_seconds` | `RDNS_LOOKUP_TIMEOUT_SECONDS` | `30` |
 | レート制限の下限 | `[ratelimit] min_remaining` | `RDNS_LOOKUP_MIN_REMAINING` | `20` |
-| MCP インライン上限 | `[mcp] inline_max_records` | `RDNS_LOOKUP_MCP_INLINE_MAX` | `200` |
-| MCP ワークスペース | `[mcp] workspace` | `RDNS_LOOKUP_WORKSPACE` | （なし） |
 
 credential はどこにも登場しません。ip.thc.org に認証機構が存在しないためです。
 

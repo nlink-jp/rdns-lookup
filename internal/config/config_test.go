@@ -45,8 +45,8 @@ func TestLoadDefaults(t *testing.T) {
 	if cfg.Timeout != DefaultTimeout {
 		t.Errorf("Timeout = %s, want %s", cfg.Timeout, DefaultTimeout)
 	}
-	if cfg.MinRemaining != DefaultMinRemaining || cfg.MCPInlineMax != DefaultMCPInlineMax {
-		t.Errorf("MinRemaining/MCPInlineMax = %d/%d", cfg.MinRemaining, cfg.MCPInlineMax)
+	if cfg.MinRemaining != DefaultMinRemaining {
+		t.Errorf("MinRemaining = %d", cfg.MinRemaining)
 	}
 	if cfg.BaseURL != "" {
 		t.Errorf("BaseURL = %q, want empty (built-in)", cfg.BaseURL)
@@ -84,8 +84,6 @@ timeout_seconds = 12
 min_remaining = 50
 
 [mcp]
-inline_max_records = 10
-workspace = "/tmp/rdns-ws-test"
 `)
 	cfg, err := Load(path, 0)
 	if err != nil {
@@ -105,9 +103,6 @@ workspace = "/tmp/rdns-ws-test"
 	}
 	if cfg.MinRemaining != 50 {
 		t.Errorf("MinRemaining = %d", cfg.MinRemaining)
-	}
-	if cfg.MCPInlineMax != 10 || cfg.WorkspaceDir != "/tmp/rdns-ws-test" {
-		t.Errorf("mcp = %d/%s", cfg.MCPInlineMax, cfg.WorkspaceDir)
 	}
 }
 
@@ -169,7 +164,6 @@ func TestValidateRejectsNonPositive(t *testing.T) {
 	tests := []string{
 		"[query]\ndefault_limit = 0\n",
 		"[query]\nmax_all = 0\n",
-		"[mcp]\ninline_max_records = 0\n",
 	}
 	for _, body := range tests {
 		if _, err := Load(writeConfig(t, body), 0); err == nil {
@@ -186,7 +180,6 @@ func TestBadValuesRejected(t *testing.T) {
 		"[cache]\nttl_hours = -1\n",
 		"[network]\ntimeout_seconds = nope\n",
 		"[ratelimit]\nmin_remaining = x\n",
-		"[mcp]\ninline_max_records = x\n",
 	}
 	for _, body := range tests {
 		if _, err := Load(writeConfig(t, body), 0); err == nil {
@@ -204,7 +197,6 @@ func TestBadEnvRejected(t *testing.T) {
 		"RDNS_LOOKUP_CACHE_TTL_HOURS": "-3",
 		"RDNS_LOOKUP_TIMEOUT_SECONDS": "soon",
 		"RDNS_LOOKUP_MIN_REMAINING":   "few",
-		"RDNS_LOOKUP_MCP_INLINE_MAX":  "few",
 	}
 	for k, v := range tests {
 		t.Run(k, func(t *testing.T) {

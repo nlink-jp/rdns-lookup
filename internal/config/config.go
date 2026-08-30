@@ -33,9 +33,6 @@ const (
 	// DefaultMinRemaining is the rate-limit floor at which a bulk run pauses
 	// for replenishment instead of pressing on.
 	DefaultMinRemaining = 20
-	// DefaultMCPInlineMax is how many records an MCP tool returns inline
-	// before switching to a file under workspace_root.
-	DefaultMCPInlineMax = 200
 )
 
 // Config holds resolved runtime settings. No credentials: the upstream API is
@@ -49,8 +46,6 @@ type Config struct {
 	CacheTTL     time.Duration // how long a cached answer stays fresh
 	Timeout      time.Duration // network timeout per exchange
 	MinRemaining int           // pause for replenishment below this rate-limit budget
-	MCPInlineMax int           // MCP records returned inline before spilling to a file
-	WorkspaceDir string        // default MCP file-mediated output root
 }
 
 // Load resolves configuration. If configPath is empty the default location
@@ -65,7 +60,6 @@ func Load(configPath string, timeoutOverride time.Duration) (*Config, error) {
 		CacheTTL:     DefaultCacheTTL,
 		Timeout:      DefaultTimeout,
 		MinRemaining: DefaultMinRemaining,
-		MCPInlineMax: DefaultMCPInlineMax,
 	}
 
 	if configPath == "" {
@@ -106,9 +100,6 @@ func validate(cfg *Config) error {
 	}
 	if cfg.MaxAll > thc.CSVMaxLimit {
 		return fmt.Errorf("[query] max_all cannot exceed %d (the upstream CSV limit)", thc.CSVMaxLimit)
-	}
-	if cfg.MCPInlineMax < 1 {
-		return fmt.Errorf("[mcp] inline_max_records must be at least 1")
 	}
 	return nil
 }
@@ -173,16 +164,6 @@ func applySections(cfg *Config, sections map[string]map[string]string) error {
 		}
 	}
 	if m := sections["mcp"]; m != nil {
-		if v := m["inline_max_records"]; v != "" {
-			n, err := parseInt(v)
-			if err != nil {
-				return fmt.Errorf("[mcp] inline_max_records: %w", err)
-			}
-			cfg.MCPInlineMax = n
-		}
-		if v := m["workspace"]; v != "" {
-			cfg.WorkspaceDir = expandHome(v)
-		}
 	}
 	return nil
 }
@@ -235,16 +216,6 @@ func applyEnv(cfg *Config) error {
 			return fmt.Errorf("RDNS_LOOKUP_MIN_REMAINING: %w", err)
 		}
 		cfg.MinRemaining = n
-	}
-	if v := os.Getenv("RDNS_LOOKUP_MCP_INLINE_MAX"); v != "" {
-		n, err := parseInt(v)
-		if err != nil {
-			return fmt.Errorf("RDNS_LOOKUP_MCP_INLINE_MAX: %w", err)
-		}
-		cfg.MCPInlineMax = n
-	}
-	if v := os.Getenv("RDNS_LOOKUP_WORKSPACE"); v != "" {
-		cfg.WorkspaceDir = expandHome(v)
 	}
 	return nil
 }

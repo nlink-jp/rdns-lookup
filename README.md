@@ -83,7 +83,7 @@ Every result states how many records upstream holds against how many were retrie
 rdns-lookup mcp
 ```
 
-Tools: `lookup_rdns`, `lookup_subdomains`, `lookup_cnames`, `cache_status`, `get_usage`. **Call `get_usage` first** — it returns the full reference, the result schema, and the error-recovery table. Tool errors are structured JSON (`{code, message}`); finding nothing indexed is a normal result, not an error. Results above 200 records are written as JSONL to `workspace_root` and only the path plus a count summary is returned, so an agent's context is not flooded.
+Tools: `lookup_rdns`, `lookup_subdomains`, `lookup_cnames`, `cache_status`, `get_usage`. **Call `get_usage` first** — it returns the full reference, the result schema, and the error-recovery table. Tool errors are structured JSON (`{code, message}`); finding nothing indexed is a normal result, not an error. Every record retrieved is returned inline — the server writes no files and takes no path argument, so it works against a client with no filesystem of its own. `limit` is what bounds a response; `truncated` and `matching_records` tell you when the index holds more than you asked for.
 
 Register it with Claude Code:
 
@@ -112,8 +112,6 @@ Register it with Claude Code:
 | Cache directory | `[cache] dir` | `RDNS_LOOKUP_CACHE_DIR` | `~/.cache/rdns-lookup` |
 | Network timeout | `[network] timeout_seconds` | `RDNS_LOOKUP_TIMEOUT_SECONDS` | `30` |
 | Rate-limit floor | `[ratelimit] min_remaining` | `RDNS_LOOKUP_MIN_REMAINING` | `20` |
-| MCP inline limit | `[mcp] inline_max_records` | `RDNS_LOOKUP_MCP_INLINE_MAX` | `200` |
-| MCP workspace | `[mcp] workspace` | `RDNS_LOOKUP_WORKSPACE` | (none) |
 
 No credentials appear anywhere: ip.thc.org has no authentication mechanism.
 

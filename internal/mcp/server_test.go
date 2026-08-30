@@ -3,8 +3,6 @@ package mcp
 import (
 	"bytes"
 	"encoding/json"
-	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -40,7 +38,6 @@ func newServer(t *testing.T, f engine.Fetcher) (*engine.Engine, *config.Config) 
 		CacheDir:     t.TempDir(),
 		CacheTTL:     24 * time.Hour,
 		MinRemaining: 20,
-		MCPInlineMax: 3,
 	}
 	e := &engine.Engine{
 		Cfg:    cfg,
@@ -339,54 +336,11 @@ func TestNetworkErrorCode(t *testing.T) {
 	}
 }
 
-// An agent's context is scarcer than disk, so a large result becomes a file.
-func TestLargeResultGoesToFile(t *testing.T) {
-	e, cfg := newServer(t, fakeFetcher{page: pageWith("a.com", "b.com", "c.com", "d.com", "e.com")})
-	ws := t.TempDir()
-	text, isErr := toolText(t, drive(t, e, cfg,
-		call("lookup_rdns", `{"ip_address":"1.1.1.1","workspace_root":`+jsonString(ws)+`}`))[0])
-	if isErr {
-		t.Fatalf("unexpected error: %s", text)
-	}
-	var res map[string]any
-	if err := json.Unmarshal([]byte(text), &res); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	path, ok := res["records_file"].(string)
-	if !ok || path == "" {
-		t.Fatalf("result should carry records_file: %v", res)
-	}
-	if res["records_count"].(float64) != 5 {
-		t.Errorf("records_count = %v, want 5", res["records_count"])
-	}
-	if inner, ok := res["result"].(map[string]any); !ok {
-		t.Error("result summary missing")
-	} else if _, has := inner["records"]; has {
-		t.Error("the summary must not repeat the records inline")
-	}
-
-	body, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatalf("read records file: %v", err)
-	}
-	lines := strings.Split(strings.TrimSpace(string(body)), "\n")
-	if len(lines) != 5 {
-		t.Fatalf("file has %d lines, want 5", len(lines))
-	}
-	var rec thc.Record
-	if err := json.Unmarshal([]byte(lines[0]), &rec); err != nil {
-		t.Fatalf("each line should be a record object: %v", err)
-	}
-	if rec.Domain == "" {
-		t.Error("record has no domain")
-	}
-	if filepath.Dir(path) != ws {
-		t.Errorf("file %q should sit in the supplied workspace", path)
-	}
-}
-
-// With nowhere to write, cap inline rather than flood the caller — and say so.
-func TestLargeResultWithoutWorkspaceIsCappedAndSaysSo(t *testing.T) {
+// Every record retrieved comes back inline. The server used to spill a result
+// past an inline cap to a caller-supplied workspace_root, which made it unusable
+// by a client with no filesystem — and never reached past `limit` anyway, since
+// `limit` bounds the upstream fetch itself.
+func TestEveryRetrievedRecordIsReturnedInline(t *testing.T) {
 	e, cfg := newServer(t, fakeFetcher{page: pageWith("a.com", "b.com", "c.com", "d.com", "e.com")})
 	text, isErr := toolText(t, drive(t, e, cfg, call("lookup_rdns", `{"ip_address":"1.1.1.1"}`))[0])
 	if isErr {
@@ -396,35 +350,36 @@ func TestLargeResultWithoutWorkspaceIsCappedAndSaysSo(t *testing.T) {
 	if err := json.Unmarshal([]byte(text), &res); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	records := res["records"].([]any)
-	if len(records) != cfg.MCPInlineMax {
-		t.Errorf("got %d records inline, want the cap %d", len(records), cfg.MCPInlineMax)
+	records, _ := res["records"].([]any)
+	if len(records) != 5 {
+		t.Fatalf("got %d records inline, want all 5 that were retrieved", len(records))
 	}
-	if res["truncated"] != true {
-		t.Error("a capped result must be marked truncated")
+	if res["truncated"] == true {
+		t.Error("nothing was held back, so the result must not be marked truncated")
 	}
-	note := res["truncation_note"].(string)
-	if !strings.Contains(note, "workspace_root") {
-		t.Errorf("note %q should mention workspace_root", note)
+	for _, gone := range []string{"records_file", "records_count", "workspace"} {
+		if strings.Contains(text, gone) {
+			t.Errorf("result still carries %q — file mediation was not removed: %s", gone, text)
+		}
 	}
 }
 
-// A CIDR block contains '/', which must not become a path separator.
-func TestWorkspaceFilenameIsSafeForBlocks(t *testing.T) {
-	e, cfg := newServer(t, fakeFetcher{page: pageWith("a.com", "b.com", "c.com", "d.com")})
-	ws := t.TempDir()
-	text, _ := toolText(t, drive(t, e, cfg,
-		call("lookup_rdns", `{"ip_address":"1.1.1.0/24","workspace_root":`+jsonString(ws)+`}`))[0])
+// `truncated` still means what it always meant: the upstream index held more
+// than `limit` retrieved. That is the caller's signal to raise `limit`.
+func TestTruncatedStillReportsAnIncompleteUpstreamSet(t *testing.T) {
+	page := pageWith("a.com", "b.com")
+	page.MatchingRecords = 900
+	e, cfg := newServer(t, fakeFetcher{page: page})
+	text, _ := toolText(t, drive(t, e, cfg, call("lookup_rdns", `{"ip_address":"1.1.1.1"}`))[0])
 	var res map[string]any
 	if err := json.Unmarshal([]byte(text), &res); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
-	path := res["records_file"].(string)
-	if filepath.Dir(path) != ws {
-		t.Errorf("file %q escaped into a subdirectory", path)
+	if res["truncated"] != true {
+		t.Errorf("an incomplete upstream set must stay marked truncated: %v", res)
 	}
-	if strings.Contains(filepath.Base(path), "/") {
-		t.Errorf("filename %q contains a separator", filepath.Base(path))
+	if res["matching_records"].(float64) != 900 {
+		t.Errorf("matching_records = %v, want the upstream total 900", res["matching_records"])
 	}
 }
 
@@ -461,24 +416,4 @@ func TestBadArgumentsAreStructuredError(t *testing.T) {
 	if !strings.Contains(text, "invalid_input") {
 		t.Errorf("error %q should be invalid_input", text)
 	}
-}
-
-func TestSafeSlug(t *testing.T) {
-	tests := map[string]string{
-		"1.1.1.1":      "1.1.1.1",
-		"1.1.1.0/24":   "1.1.1.0_24",
-		"2404:6800::1": "2404_6800__1",
-		"example.com":  "example.com",
-		"a b":          "a_b",
-	}
-	for in, want := range tests {
-		if got := safeSlug(in); got != want {
-			t.Errorf("safeSlug(%q) = %q, want %q", in, got, want)
-		}
-	}
-}
-
-func jsonString(s string) string {
-	b, _ := json.Marshal(s)
-	return string(b)
 }
