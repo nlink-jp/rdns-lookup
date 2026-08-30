@@ -163,8 +163,6 @@ func applySections(cfg *Config, sections map[string]map[string]string) error {
 			cfg.MinRemaining = n
 		}
 	}
-	if m := sections["mcp"]; m != nil {
-	}
 	return nil
 }
 
