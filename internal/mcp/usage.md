@@ -81,11 +81,11 @@ No arguments. Reports the cache directory, entry count, TTL, and the default and
 
 ### Sizing a result
 
-Every record retrieved comes back inline. This server writes no files, owns no output directory and takes no path argument, so it works against a client that has no filesystem of its own.
+Every record retrieved comes back inline; no file is written and no path comes back.
 
-That makes `limit` the knob that bounds a response: it is the number of records fetched from upstream, and every one of them is returned. One lookup can pull tens of thousands of rows with `all`, so ask for what you can hold.
+`limit` is therefore the knob that bounds a response: it is the number of records fetched from upstream, and every one of them is returned. One lookup can pull tens of thousands of rows with `all`, so ask for what you can hold.
 
-`truncated` and `matching_records` are a different signal, and they still mean what they always did: the index holds more than you retrieved. Raise `limit` (or set `all`) to reach the rest — that was never something a file could give you, because the file only ever held what `limit` had already fetched.
+`truncated` and `matching_records` are a different signal: the index holds more than you retrieved. Raise `limit` (or set `all`) to reach the rest.
 
 ## Error recovery
 
