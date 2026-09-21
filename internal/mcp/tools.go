@@ -31,6 +31,29 @@ const Instructions = "rdns-lookup queries the free DNS index at ip.thc.org for t
 	"structured JSON ({code, message}). Call " +
 	"get_usage for the full tool reference and error-recovery table. No credentials are required."
 
+// closeSchemas sets additionalProperties:false on every tool's top-level input
+// schema, as organization ADR-021 §10 requires, so a client validating
+// arguments against the schema refuses a mistyped parameter instead of sending
+// it on.
+//
+// It is a pass over the finished list rather than a helper each schema has to
+// call, so a tool added later as a plain literal cannot forget it — the rule is
+// enforced by the one place every schema goes through, not by authors
+// remembering. Only the top level is touched; a nested object that deliberately
+// accepts free-form keys keeps whatever it declares.
+//
+// Note what this does NOT do: toolLookup decodes arguments with plain
+// json.Unmarshal, so an unknown argument that reaches this server anyway is
+// still accepted and ignored here. The schema binds validating clients only.
+func closeSchemas(defs []map[string]any) []map[string]any {
+	for _, def := range defs {
+		if schema, ok := def["inputSchema"].(map[string]any); ok {
+			schema["additionalProperties"] = false
+		}
+	}
+	return defs
+}
+
 // toolsList returns the advertised tool set with JSON Schema for each input.
 func toolsList() any {
 	limitProp := map[string]any{
@@ -42,7 +65,7 @@ func toolsList() any {
 		"description": "Retrieve up to the ceiling (50000). Costs more upstream budget; check `truncated` in the result.",
 	}
 	return map[string]any{
-		"tools": []map[string]any{
+		"tools": closeSchemas([]map[string]any{
 			{
 				"name":        "get_usage",
 				"description": "Return this server's operating manual (markdown): the tools, the result schema, and the error-recovery table. Call it once before first use.",
@@ -100,7 +123,7 @@ func toolsList() any {
 				"description": "Report the local result-cache state: entry count, TTL, and the default and ceiling record limits.",
 				"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}},
 			},
-		},
+		}),
 	}
 }
 
