@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"bytes"
 	_ "embed"
 	"encoding/json"
 	"errors"
@@ -42,9 +43,9 @@ const Instructions = "rdns-lookup queries the free DNS index at ip.thc.org for t
 // remembering. Only the top level is touched; a nested object that deliberately
 // accepts free-form keys keeps whatever it declares.
 //
-// Note what this does NOT do: toolLookup decodes arguments with plain
-// json.Unmarshal, so an unknown argument that reaches this server anyway is
-// still accepted and ignored here. The schema binds validating clients only.
+// The schema binds validating clients only; decodeArgs below is what refuses
+// an unknown argument that reaches this server anyway. ADR-021 §4 requires
+// both halves, and this one is the declaration.
 func closeSchemas(defs []map[string]any) []map[string]any {
 	for _, def := range defs {
 		if schema, ok := def["inputSchema"].(map[string]any); ok {
@@ -52,6 +53,33 @@ func closeSchemas(defs []map[string]any) []map[string]any {
 		}
 	}
 	return defs
+}
+
+// decodeArgs decodes a tool's arguments strictly: an argument the tool does not
+// declare is refused by name, and a malformed argument object is refused rather
+// than read as an empty one. Every tool decodes through here.
+//
+// closeSchemas above is only the declared half of org ADR-021 §4 — what a
+// schema-checking client refuses before the call. This is the half that
+// actually refuses, and it is needed because not every client checks the
+// schema, and a caller speaking JSON-RPC directly checks nothing. The plain
+// json.Unmarshal this replaces accepted any field it did not recognize, so a
+// misspelt `limit` fell back to the default while the result read as the
+// bounded set that was asked for — and `limit` is this server's only bound on
+// the response, because every record retrieved comes back inline.
+func decodeArgs(raw json.RawMessage, into any) error {
+	raw = bytes.TrimSpace(raw)
+	// Omitted or null arguments mean the empty object, not an error: the
+	// required-target check below produces the useful message in that case.
+	if len(raw) == 0 || string(raw) == "null" {
+		raw = []byte("{}")
+	}
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(into); err != nil {
+		return errors.New("arguments: " + err.Error())
+	}
+	return nil
 }
 
 // toolsList returns the advertised tool set with JSON Schema for each input.
@@ -137,6 +165,10 @@ func (s *server) toolsCall(params json.RawMessage) (toolResult, *rpcError) {
 	}
 	switch p.Name {
 	case "get_usage":
+		// No arguments — which still means "none", not "any".
+		if err := decodeArgs(p.Arguments, &struct{}{}); err != nil {
+			return errorResult("invalid_input", err.Error()), nil
+		}
 		return textResult(false, usageMarkdown), nil
 	case "lookup_rdns":
 		return s.toolLookup(thc.KindRDNS, p.Arguments), nil
@@ -145,50 +177,87 @@ func (s *server) toolsCall(params json.RawMessage) (toolResult, *rpcError) {
 	case "lookup_cnames":
 		return s.toolLookup(thc.KindCNAMEs, p.Arguments), nil
 	case "cache_status":
+		if err := decodeArgs(p.Arguments, &struct{}{}); err != nil {
+			return errorResult("invalid_input", err.Error()), nil
+		}
 		return s.toolCacheStatus(), nil
 	default:
 		return toolResult{}, &rpcError{Code: -32602, Message: "unknown tool: " + p.Name}
 	}
 }
 
-// toolArgs is the union of the three lookup tools' arguments; each tool reads
-// only the target field that belongs to it.
-type toolArgs struct {
-	IPAddress    string   `json:"ip_address"`
-	Domain       string   `json:"domain"`
-	TargetDomain string   `json:"target_domain"`
-	Limit        int      `json:"limit"`
-	All          bool     `json:"all"`
-	TLD          []string `json:"tld"`
-	ApexDomain   string   `json:"apex_domain"`
-	Refresh      bool     `json:"refresh"`
+// commonArgs are the arguments all three lookup tools share. They are embedded
+// rather than repeated so the three structs below cannot drift apart.
+type commonArgs struct {
+	Limit   int  `json:"limit"`
+	All     bool `json:"all"`
+	Refresh bool `json:"refresh"`
+}
+
+// The three lookup tools take one argument struct each, holding exactly what
+// that tool's schema declares.
+//
+// This used to be one union struct covering all three. With strict decoding
+// that would have kept a hole the schemas do not have: `ip_address` sent to
+// lookup_subdomains decodes into a declared field, so the decoder accepts it
+// and the tool then ignores it — the same silent-drop this change exists to
+// remove, one step in. Splitting the structs lets the decoder enforce each
+// tool's own schema instead of a rule written out beside it.
+type rdnsArgs struct {
+	IPAddress  string   `json:"ip_address"`
+	TLD        []string `json:"tld"`
+	ApexDomain string   `json:"apex_domain"`
+	commonArgs
+}
+
+type subdomainsArgs struct {
+	Domain string `json:"domain"`
+	commonArgs
+}
+
+type cnamesArgs struct {
+	TargetDomain string `json:"target_domain"`
+	commonArgs
 }
 
 func (s *server) toolLookup(kind thc.Kind, raw json.RawMessage) toolResult {
-	var a toolArgs
-	if len(raw) > 0 {
-		if err := json.Unmarshal(raw, &a); err != nil {
-			return errorResult("invalid_input", "arguments: "+err.Error())
-		}
-	}
-
-	target, field := a.IPAddress, "ip_address"
+	var (
+		target, field string
+		common        commonArgs
+		tlds          []string
+		apexDomain    string
+	)
 	switch kind {
 	case thc.KindSubdomains:
-		target, field = a.Domain, "domain"
+		var a subdomainsArgs
+		if err := decodeArgs(raw, &a); err != nil {
+			return errorResult("invalid_input", err.Error())
+		}
+		target, field, common = a.Domain, "domain", a.commonArgs
 	case thc.KindCNAMEs:
-		target, field = a.TargetDomain, "target_domain"
+		var a cnamesArgs
+		if err := decodeArgs(raw, &a); err != nil {
+			return errorResult("invalid_input", err.Error())
+		}
+		target, field, common = a.TargetDomain, "target_domain", a.commonArgs
+	default:
+		var a rdnsArgs
+		if err := decodeArgs(raw, &a); err != nil {
+			return errorResult("invalid_input", err.Error())
+		}
+		target, field, common = a.IPAddress, "ip_address", a.commonArgs
+		tlds, apexDomain = a.TLD, a.ApexDomain
 	}
 	if strings.TrimSpace(target) == "" {
 		return errorResult("invalid_input", "provide '"+field+"'")
 	}
 
 	opts := engine.Options{
-		Limit:      a.Limit,
-		All:        a.All,
-		TLDs:       a.TLD,
-		ApexDomain: a.ApexDomain,
-		Refresh:    a.Refresh,
+		Limit:      common.Limit,
+		All:        common.All,
+		TLDs:       tlds,
+		ApexDomain: apexDomain,
+		Refresh:    common.Refresh,
 	}
 
 	var (

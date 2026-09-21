@@ -87,6 +87,21 @@ Every record retrieved comes back inline; no file is written and no path comes b
 
 `truncated` and `matching_records` are a different signal: the index holds more than you retrieved. Raise `limit` (or set `all`) to reach the rest.
 
+## Arguments are strict
+
+Every tool refuses an argument it does not declare, naming it:
+`arguments: json: unknown field "limitt"`. A wrong-typed argument is refused
+the same way. Nothing runs before the arguments decode, so a rejected call
+spends no upstream budget — fix the name or the type and call again.
+
+`limit` is why this matters most here: a misspelt one used to fall back to the
+default while the result read as the bounded set asked for, and `limit` is the
+only bound on a response because every record retrieved comes back inline.
+
+Each lookup tool takes only its own arguments, as listed above: `tld` and
+`apex_domain` belong to `lookup_rdns` alone, and sending `ip_address` to
+`lookup_subdomains` is refused rather than ignored.
+
 ## Error recovery
 
 Tool errors are structured JSON: `{"code": ..., "message": ...}`.
@@ -94,6 +109,8 @@ Tool errors are structured JSON: `{"code": ..., "message": ...}`.
 | code | meaning | recovery |
 |---|---|---|
 | `invalid_input` | The target failed validation, or a filter was combined with a block. | Read the message: it names the specific problem. For a CIDR block, use `/8`, `/16`, `/24`, or `/32`. For `tld`/`apex_domain`, query a single address, or filter the returned records yourself. |
+| `invalid_input` + `arguments: json: unknown field "…"` | An argument name this tool does not declare — a typo, or another lookup tool's argument. No upstream budget was spent. | Fix the spelling and call again; the named field is the offending one. |
+| `invalid_input` + `arguments: json: cannot unmarshal …` | An argument of the wrong JSON type (`limit` is an integer, `tld` an array, `all`/`refresh` booleans). | Check the argument's type in the tool list above and call again. |
 | `rate_limited` | The upstream budget is spent. | Wait for replenishment — roughly 0.5 requests per second, 250 burst — then retry. Do not loop immediately. |
 | `network_error` | The request failed, or upstream returned an unexpected status. | Retry once; if it persists, ip.thc.org is likely down. There is no alternative source for this data. |
 

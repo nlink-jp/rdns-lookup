@@ -85,6 +85,8 @@ rdns-lookup mcp
 
 Tools: `lookup_rdns`, `lookup_subdomains`, `lookup_cnames`, `cache_status`, `get_usage`. **Call `get_usage` first** — it returns the full reference, the result schema, and the error-recovery table. Tool errors are structured JSON (`{code, message}`); finding nothing indexed is a normal result, not an error. Every record retrieved is returned inline — the server writes no files and takes no path argument, so it works against a client with no filesystem of its own. `limit` is what bounds a response; `truncated` and `matching_records` tell you when the index holds more than you asked for.
 
+**Arguments are checked strictly.** A call carrying an argument a tool does not declare fails with `invalid_input`, naming it — `arguments: json: unknown field "limitt"` — rather than running without it. A misspelt `limit` used to fall back to the default while the result read as the bounded set asked for. Each lookup tool takes only its own arguments, so `tld` and `apex_domain` are refused anywhere but `lookup_rdns`. Wrong-typed arguments are refused the same way, and nothing runs before the arguments decode, so a rejected call spends no upstream budget.
+
 Register it with Claude Code:
 
 ```json

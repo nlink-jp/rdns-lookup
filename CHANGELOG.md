@@ -6,6 +6,32 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Changed
+
+- **An MCP tool call carrying an argument the tool does not declare now fails
+  instead of being quietly ignored.** This is a deliberate behaviour change,
+  required by org ADR-021 §4, and it is the one the previous release recorded
+  as still outstanding. Until now an unrecognized argument was accepted and
+  dropped, and `limit` is what made that costly: misspell it and the lookup
+  falls back to the default record count while the result reads as the bounded
+  set that was asked for — and `limit` is this server's only bound on a
+  response, because every record retrieved comes back inline. Every tool —
+  including `get_usage` and `cache_status`, which take no arguments — now
+  decodes with `DisallowUnknownFields` and refuses the call, naming the
+  offending field:
+  `{"code":"invalid_input","message":"arguments: json: unknown field \"limitt\""}`.
+
+  **Each lookup tool now also refuses the other lookups' arguments**, which its
+  schema always excluded but the decoder did not: the three tools shared one
+  union argument struct, so `ip_address` sent to `lookup_subdomains` was
+  accepted and ignored. They now decode their own arguments.
+
+  Nothing runs before the arguments decode, so a rejected call spends no
+  upstream budget. Omitting `arguments`, or sending `{}` or `null`, still means
+  "no arguments": a genuinely absent target still gets the message that names
+  it. There is no compatibility shim: an argument name this server does not
+  declare has never meant anything, so the only fix is to correct it.
+
 ### Fixed
 
 - Every MCP tool schema now sets `additionalProperties: false`, as
@@ -14,12 +40,6 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   one pass over the tool list (`closeSchemas`) rather than per literal, so a
   tool added later cannot omit it, and pinned by
   `TestEveryToolSchemaIsClosed` reading the schemas back off `tools/list`.
-  - The server side is unchanged and still lax: `toolLookup` decodes with
-    plain `json.Unmarshal`, so an unknown argument that reaches the server
-    anyway is accepted and ignored. That is now recorded by
-    `TestUnknownArgumentIsAcceptedByTheServer` rather than left implicit.
-    Rejecting it server-side would change what existing callers get back, so
-    it is a separate decision.
 
 ## [0.2.0] - 2026-08-31
 

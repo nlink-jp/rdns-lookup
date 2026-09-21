@@ -85,6 +85,8 @@ rdns-lookup mcp
 
 ツール: `lookup_rdns` / `lookup_subdomains` / `lookup_cnames` / `cache_status` / `get_usage`。**まず `get_usage` を呼んでください** — ツールリファレンス、結果スキーマ、エラー回復表が返ります。ツールエラーは構造化 JSON（`{code, message}`）です。索引にヒットしないことは通常の結果であり、エラーではありません。取得したレコードは常にすべてインラインで返ります。サーバーはファイルを書かずパス引数も取らないので、ファイルシステムを持たないクライアントでも動作します。応答量を決めるのは `limit` です。`truncated` と `matching_records` は別の signal で、索引に取得件数より多く存在することを示します。
 
+**引数は厳格に検査されます.** ツールが宣言していない引数を含む呼び出しは `invalid_input` で失敗し、その名前を挙げます（`arguments: json: unknown field "limitt"`）。従来は無視して実行していたため、`limit` の綴り間違いは既定件数へフォールバックしたまま「要求した件数に収めた結果」として返っていました。各 lookup ツールは自分の引数だけを受け取るので、`tld` と `apex_domain` は `lookup_rdns` 以外では拒否されます。型が違う引数も同様に拒否され、引数のデコードより前には何も実行しないため、拒否された呼び出しは上流の予算を消費しません。
+
 Claude Code への登録:
 
 ```json
