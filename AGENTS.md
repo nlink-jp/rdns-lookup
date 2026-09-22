@@ -15,7 +15,7 @@ make build   # → dist/rdns-lookup  (NEVER `go build` directly — it drops the
 make test    # go test -race -cover ./...   (fully offline)
 make e2e     # live tests against the real API (network required)
 make check   # lint + test + build-all
-make verify-release  # gate: .notarized marker + freshness (run before upload)
+make verify-release  # gate: notarized, fresh, runs at this version, clean linux archives (run before upload)
 ```
 
 Go 1.25.0, standard library only — `go.mod` has no `require` block. Shared code (the release scripts, `parseTOML`, `writeAtomic`, the `internal/mcp` skeleton, `internal/idn`) is vendored from sibling projects rather than imported, matching the series.
