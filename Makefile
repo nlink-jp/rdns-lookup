@@ -17,7 +17,7 @@ PLATFORMS := \
 	darwin/arm64 \
 	windows/amd64
 
-.PHONY: build build-all test lint check e2e package verify-release clean help
+.PHONY: build build-all test lint check e2e package verify-release clean help vuln
 
 ## build: Build for the current platform
 build:
@@ -50,12 +50,19 @@ e2e: build
 	go test -tags e2e -count=1 ./e2e/...
 	@scripts/e2e.sh
 
+## vuln: known vulnerabilities in the modules and the standard library this
+## build uses (govulncheck). `package` depends on it, so a release cannot be
+## built past a finding. It needs the network, and its database changes under
+## an unchanged tree: a finding can appear without a commit.
+vuln:
+	govulncheck ./...
+
 ## package: Build all platforms, archive with version suffix (zip for
 ## darwin/windows, tar.gz for linux), bundle the canonical binary +
 ## README.md + LICENSE, and notarize the darwin build. Asset naming
 ## follows the org Release Archive Standard
 ## (rdns-lookup-vX.Y.Z-<os>-<arch>.<ext>).
-package: build-all
+package: vuln build-all
 	@cd dist && for p in $(PLATFORMS); do os=$${p%/*}; arch=$${p#*/}; \
 		ext=""; [ "$$os" = windows ] && ext=".exe"; \
 		stage=_pkg; rm -rf $$stage; mkdir -p $$stage; \
