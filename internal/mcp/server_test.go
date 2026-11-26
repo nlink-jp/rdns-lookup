@@ -103,13 +103,13 @@ func call(name, args string) string {
 
 func TestInitialize(t *testing.T) {
 	e, cfg := newServer(t, fakeFetcher{})
-	got := drive(t, e, cfg, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-03-26"}}`)
+	got := drive(t, e, cfg, `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}`)
 	if len(got) != 1 {
 		t.Fatalf("got %d replies, want 1", len(got))
 	}
 	res := got[0]["result"].(map[string]any)
-	if res["protocolVersion"] != "2025-03-26" {
-		t.Errorf("protocolVersion = %v, want the client's value echoed", res["protocolVersion"])
+	if res["protocolVersion"] != "2025-06-18" {
+		t.Errorf("protocolVersion = %v, want the requested revision the server supports", res["protocolVersion"])
 	}
 	info := res["serverInfo"].(map[string]any)
 	if info["name"] != "rdns-lookup" {
@@ -124,8 +124,8 @@ func TestInitializeDefaultsProtocolVersion(t *testing.T) {
 	e, cfg := newServer(t, fakeFetcher{})
 	got := drive(t, e, cfg, `{"jsonrpc":"2.0","id":1,"method":"initialize"}`)
 	res := got[0]["result"].(map[string]any)
-	if res["protocolVersion"] != defaultProtocolVersion {
-		t.Errorf("protocolVersion = %v, want %q", res["protocolVersion"], defaultProtocolVersion)
+	if res["protocolVersion"] != supportedProtocolVersions[0] {
+		t.Errorf("protocolVersion = %v, want the newest supported %q", res["protocolVersion"], supportedProtocolVersions[0])
 	}
 }
 
@@ -415,5 +415,27 @@ func TestBadArgumentsAreStructuredError(t *testing.T) {
 	}
 	if !strings.Contains(text, "invalid_input") {
 		t.Errorf("error %q should be invalid_input", text)
+	}
+}
+
+func TestInitializeNegotiatesProtocolVersion(t *testing.T) {
+	cases := []struct{ params, want string }{
+		{`{"protocolVersion":"2025-11-25"}`, "2025-11-25"},
+		{`{"protocolVersion":"2025-06-18"}`, "2025-06-18"},
+		{`{"protocolVersion":"2024-11-05"}`, "2024-11-05"},
+		// 2025-03-26 requires accepting JSON-RPC batches, which this server does not.
+		{`{"protocolVersion":"2025-03-26"}`, "2025-11-25"},
+		// A revision the server does not satisfy must not be echoed back.
+		{`{"protocolVersion":"2026-07-28"}`, "2025-11-25"},
+		{`{"protocolVersion":""}`, "2025-11-25"},
+		{`{}`, "2025-11-25"},
+		{`not json`, "2025-11-25"},
+		{``, "2025-11-25"},
+	}
+	for _, c := range cases {
+		res := (&server{}).initializeResult(json.RawMessage(c.params)).(map[string]any)
+		if got := res["protocolVersion"]; got != c.want {
+			t.Errorf("initialize %s: protocolVersion = %v, want %s", c.params, got, c.want)
+		}
 	}
 }
