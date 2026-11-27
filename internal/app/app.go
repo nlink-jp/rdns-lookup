@@ -5,10 +5,13 @@
 package app
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/nlink-jp/rdns-lookup/internal/config"
 	"github.com/nlink-jp/rdns-lookup/internal/engine"
@@ -100,8 +103,16 @@ ip.thc.org, a free service; no credentials are required.
 `)
 }
 
-// cmdMCP runs the stdio MCP server until stdin closes (MCP has no protocol
-// cancel; a closing stdin is the shutdown signal).
+// notifyContext is signal.NotifyContext, and mcpStdin and mcpStdout the
+// process's streams; tests stand in for them.
+var (
+	notifyContext           = signal.NotifyContext
+	mcpStdin      io.Reader = os.Stdin
+	mcpStdout     io.Writer = os.Stdout
+)
+
+// cmdMCP runs the stdio MCP server until stdin closes, answering every
+// request that arrived, or until SIGINT or SIGTERM.
 func cmdMCP(args []string, version string) int {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
@@ -115,7 +126,11 @@ func cmdMCP(args []string, version string) int {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		return exitError
 	}
-	if err := mcp.Serve(engine.New(cfg, version), cfg, version, os.Stdin, os.Stdout); err != nil {
+	// SIGINT and SIGTERM cancel the server's ctx: it returns at once and its
+	// cleanup runs (server-migration §2).
+	ctx, stop := notifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := mcp.Serve(ctx, engine.New(cfg, version), cfg, version, mcpStdin, mcpStdout); err != nil {
 		fmt.Fprintf(os.Stderr, "mcp: %v\n", err)
 		return exitError
 	}
