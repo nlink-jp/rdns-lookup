@@ -31,7 +31,9 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   - `notifications/cancelled` now cancels the call.
     A cancelled lookup still runs to its end — the engine takes no context —
     and its answer is dropped; the cache is written whole to a temporary file
-    and renamed, so nothing partial is left.
+    and renamed, so no entry is ever partial; a temp file left by a process
+    ended part-way (a SIGTERM past the shutdown grace) is removed by `cache
+    clear`.
 
   Requests piped in are still all answered before the server exits at end of
   input.
@@ -44,6 +46,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - SIGINT or SIGTERM ended the MCP server by killing the process; a signal now ends it through its context, so its cleanup runs.
 - `scripts/e2e.sh` still checked the file spill retired in v0.2 (`workspace_root`, `records_file`), so it could not pass; it now checks that `workspace_root` is refused by name and that records come back inline with no file written.
 - `scripts/e2e.sh`'s "nothing indexed" check used 203.0.113.9, which the index now holds a record for; it uses 233.252.0.77 (MCAST-TEST-NET).
+- `cache clear` left behind the temp file a write leaves when the process ends part-way (a SIGTERM past the shutdown grace, a crash); it now removes it too.
 
 ## [0.3.2] - 2026-11-27
 

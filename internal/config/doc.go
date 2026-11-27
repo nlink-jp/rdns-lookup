@@ -3,5 +3,5 @@
 // file > built-in default (the flag layer is applied by the app package).
 // There are no credentials: ip.thc.org has no authentication mechanism, so
 // there is nothing secret to hold. The TOML reader is a deliberately tiny
-// subset (headers + key = value) to keep the module dependency-free.
+// subset (headers + key = value) to keep the module free of a TOML dependency.
 package config
