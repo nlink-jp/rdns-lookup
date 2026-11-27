@@ -16,8 +16,13 @@ func TestClearRemovesALeftoverTempFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	s := &Store{Dir: dir}
-	if _, err := s.Clear(); err != nil {
+	n, err := s.Clear()
+	if err != nil {
 		t.Fatal(err)
+	}
+	// The count is of entries, as status counts them.
+	if n != 0 {
+		t.Errorf("Clear counted %d entries; the temp file is not one", n)
 	}
 	if _, err := os.Stat(left); !os.IsNotExist(err) {
 		t.Fatalf("the temp file is still there (%v)", err)
