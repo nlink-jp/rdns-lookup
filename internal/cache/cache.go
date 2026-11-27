@@ -113,7 +113,9 @@ func (s *Store) Clear() (int, error) {
 	}
 	n := 0
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".json") {
+		// Entries, and temp files an interrupted write left behind (they hold
+		// an answer too).
+		if e.IsDir() || (!strings.HasSuffix(e.Name(), ".json") && !strings.HasPrefix(e.Name(), ".tmp-")) {
 			continue
 		}
 		if err := os.Remove(filepath.Join(s.Dir, e.Name())); err != nil {
