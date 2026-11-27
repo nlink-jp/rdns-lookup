@@ -1,8 +1,9 @@
 package mcp
 
 import (
-	"bytes"
+	"context"
 	"encoding/json"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -60,16 +61,15 @@ func pageWith(domains ...string) *thc.Page {
 	}
 }
 
-// drive runs the real Serve loop over newline-delimited JSON-RPC and decodes
-// every reply.
+// drive replays newline-delimited JSON-RPC requests through nlink-jp/mcp's
+// client against Serve and decodes every reply.
 func drive(t *testing.T, e *engine.Engine, cfg *config.Config, reqs ...string) []map[string]any {
 	t.Helper()
-	var out bytes.Buffer
-	if err := Serve(e, cfg, "test", strings.NewReader(strings.Join(reqs, "\n")+"\n"), &out); err != nil {
-		t.Fatalf("Serve returned error %v", err)
-	}
+	out := serveOverClient(t, func(ctx context.Context, in io.Reader, w io.Writer) error {
+		return Serve(ctx, e, cfg, "test", in, w)
+	}, strings.Join(reqs, "\n"))
 	var got []map[string]any
-	dec := json.NewDecoder(&out)
+	dec := json.NewDecoder(out)
 	for dec.More() {
 		var m map[string]any
 		if err := dec.Decode(&m); err != nil {
@@ -108,9 +108,6 @@ func TestInitialize(t *testing.T) {
 		t.Fatalf("got %d replies, want 1", len(got))
 	}
 	res := got[0]["result"].(map[string]any)
-	if res["protocolVersion"] != "2025-06-18" {
-		t.Errorf("protocolVersion = %v, want the requested revision the server supports", res["protocolVersion"])
-	}
 	info := res["serverInfo"].(map[string]any)
 	if info["name"] != "rdns-lookup" {
 		t.Errorf("serverInfo.name = %v", info["name"])
@@ -120,60 +117,12 @@ func TestInitialize(t *testing.T) {
 	}
 }
 
-func TestInitializeDefaultsProtocolVersion(t *testing.T) {
-	e, cfg := newServer(t, fakeFetcher{})
-	got := drive(t, e, cfg, `{"jsonrpc":"2.0","id":1,"method":"initialize"}`)
-	res := got[0]["result"].(map[string]any)
-	if res["protocolVersion"] != supportedProtocolVersions[0] {
-		t.Errorf("protocolVersion = %v, want the newest supported %q", res["protocolVersion"], supportedProtocolVersions[0])
-	}
-}
-
-// A notification has no id and must never be answered.
-func TestNotificationGetsNoReply(t *testing.T) {
-	e, cfg := newServer(t, fakeFetcher{})
-	got := drive(t, e, cfg,
-		`{"jsonrpc":"2.0","method":"notifications/initialized"}`,
-		`{"jsonrpc":"2.0","id":null,"method":"notifications/initialized"}`,
-		`{"jsonrpc":"2.0","id":1,"method":"ping"}`,
-	)
-	if len(got) != 1 {
-		t.Fatalf("got %d replies, want 1 (only the ping)", len(got))
-	}
-}
-
-func TestUnknownMethod(t *testing.T) {
-	e, cfg := newServer(t, fakeFetcher{})
-	got := drive(t, e, cfg, `{"jsonrpc":"2.0","id":1,"method":"nope"}`)
-	errObj := got[0]["error"].(map[string]any)
-	if errObj["code"].(float64) != -32601 {
-		t.Errorf("code = %v, want -32601", errObj["code"])
-	}
-}
-
 func TestUnknownTool(t *testing.T) {
 	e, cfg := newServer(t, fakeFetcher{})
 	got := drive(t, e, cfg, call("nope", "{}"))
 	errObj := got[0]["error"].(map[string]any)
 	if errObj["code"].(float64) != -32602 {
 		t.Errorf("code = %v, want -32602", errObj["code"])
-	}
-}
-
-// Malformed JSON leaves the stream unrecoverable, so report and stop.
-func TestMalformedJSONReportsParseError(t *testing.T) {
-	e, cfg := newServer(t, fakeFetcher{})
-	var out bytes.Buffer
-	if err := Serve(e, cfg, "test", strings.NewReader("{not json\n"), &out); err != nil {
-		t.Fatalf("Serve returned error %v", err)
-	}
-	var m map[string]any
-	if err := json.Unmarshal(out.Bytes(), &m); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	errObj := m["error"].(map[string]any)
-	if errObj["code"].(float64) != -32700 {
-		t.Errorf("code = %v, want -32700", errObj["code"])
 	}
 }
 
@@ -418,24 +367,11 @@ func TestBadArgumentsAreStructuredError(t *testing.T) {
 	}
 }
 
-func TestInitializeNegotiatesProtocolVersion(t *testing.T) {
-	cases := []struct{ params, want string }{
-		{`{"protocolVersion":"2025-11-25"}`, "2025-11-25"},
-		{`{"protocolVersion":"2025-06-18"}`, "2025-06-18"},
-		{`{"protocolVersion":"2024-11-05"}`, "2024-11-05"},
-		// 2025-03-26 requires accepting JSON-RPC batches, which this server does not.
-		{`{"protocolVersion":"2025-03-26"}`, "2025-11-25"},
-		// A revision the server does not satisfy must not be echoed back.
-		{`{"protocolVersion":"2026-07-28"}`, "2025-11-25"},
-		{`{"protocolVersion":""}`, "2025-11-25"},
-		{`{}`, "2025-11-25"},
-		{`not json`, "2025-11-25"},
-		{``, "2025-11-25"},
-	}
-	for _, c := range cases {
-		res := (&server{}).initializeResult(json.RawMessage(c.params)).(map[string]any)
-		if got := res["protocolVersion"]; got != c.want {
-			t.Errorf("initialize %s: protocolVersion = %v, want %s", c.params, got, c.want)
-		}
-	}
+// ADR-030 §7: the server against the three probe clients (legacy only,
+// dual-era, modern only).
+func TestAgainstTheProbeClients(t *testing.T) {
+	e, cfg := newServer(t, fakeFetcher{})
+	probeMatrix(t, func(ctx context.Context, in io.Reader, w io.Writer) error {
+		return Serve(ctx, e, cfg, "test", in, w)
+	})
 }

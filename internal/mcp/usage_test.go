@@ -11,7 +11,7 @@ import (
 // pin it to the code.
 
 func TestUsageMentionsEveryTool(t *testing.T) {
-	b, err := json.Marshal(toolsList())
+	b, err := json.Marshal(map[string]any{"tools": toolsList()})
 	if err != nil {
 		t.Fatalf("marshal toolsList: %v", err)
 	}
@@ -45,7 +45,7 @@ func TestUsageDocumentsErrorCodes(t *testing.T) {
 // Every argument the tools accept must appear in the manual, or a caller reading
 // only the manual cannot use them.
 func TestUsageDocumentsEveryArgument(t *testing.T) {
-	b, err := json.Marshal(toolsList())
+	b, err := json.Marshal(map[string]any{"tools": toolsList()})
 	if err != nil {
 		t.Fatalf("marshal toolsList: %v", err)
 	}

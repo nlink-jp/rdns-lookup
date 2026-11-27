@@ -120,7 +120,6 @@ func TestMalformedArgumentsAreRefused(t *testing.T) {
 		{"number for string", "lookup_rdns", `{"ip_address":1}`},
 		{"string for integer", "lookup_rdns", `{"ip_address":"1.1.1.1","limit":"all"}`},
 		{"string for array", "lookup_rdns", `{"ip_address":"1.1.1.1","tld":"com"}`},
-		{"array for object", "lookup_subdomains", `["example.com"]`},
 		{"string for boolean", "lookup_cnames", `{"target_domain":"example.com","all":"yes"}`},
 	}
 	for _, tc := range cases {
@@ -179,4 +178,15 @@ func structuredError(t *testing.T, text string) (string, string) {
 
 func pageFetcher() fakeFetcher {
 	return fakeFetcher{page: pageWith("example.com")}
+}
+
+// The module answers arguments that are not an object with -32602; they no
+// longer reach the tool.
+func TestNonObjectArgumentsAreAProtocolError(t *testing.T) {
+	e, cfg := newServer(t, pageFetcher())
+	got := drive(t, e, cfg, call("lookup_subdomains", `["example.com"]`))
+	errObj, _ := got[0]["error"].(map[string]any)
+	if errObj == nil || errObj["code"].(float64) != -32602 {
+		t.Errorf("array arguments: %v, want -32602", got[0])
+	}
 }

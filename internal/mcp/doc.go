@@ -1,4 +1,5 @@
-// Package mcp is a zero-dependency stdio MCP server (JSON-RPC 2.0) exposing
+// Package mcp is rdns-lookup's stdio MCP server, speaking both eras of the
+// protocol through nlink-jp/mcp's server.ToolServer (ADR-0001), exposing
 // rdns-lookup's engine as the tools lookup_rdns, lookup_subdomains,
 // lookup_cnames, cache_status, and get_usage. It shares the engine with the
 // CLI so their behaviour cannot diverge. Diagnostics must go to stderr only;
