@@ -204,3 +204,22 @@ func TestAnArgumentInAnotherCaseIsRefused(t *testing.T) {
 		}
 	}
 }
+
+// The shared arguments of the three lookup tools are declared through the
+// embedded commonArgs; spelt as declared, they are accepted by every tool.
+// Without this, an exact-name check that missed the embedded struct would
+// refuse limit, all and refresh on every call, and only the live e2e would
+// notice.
+func TestTheSharedArgumentsAreAccepted(t *testing.T) {
+	for tool, target := range map[string]string{
+		"lookup_rdns":       `"ip_address":"1.1.1.1"`,
+		"lookup_subdomains": `"domain":"example.com"`,
+		"lookup_cnames":     `"target_domain":"example.com"`,
+	} {
+		e, cfg := newServer(t, pageFetcher())
+		text, _ := toolText(t, drive(t, e, cfg, call(tool, `{`+target+`,"limit":3,"all":false,"refresh":true}`))[0])
+		if strings.Contains(text, "unknown field") || strings.Contains(text, "invalid_input") {
+			t.Errorf("%s refused its shared arguments: %s", tool, text)
+		}
+	}
+}

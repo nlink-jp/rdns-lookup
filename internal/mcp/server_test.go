@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/nlink-jp/mcp/client"
 	"github.com/nlink-jp/rdns-lookup/internal/cache"
 	"github.com/nlink-jp/rdns-lookup/internal/config"
 	"github.com/nlink-jp/rdns-lookup/internal/engine"
@@ -374,4 +375,16 @@ func TestAgainstTheProbeClients(t *testing.T) {
 	probeMatrix(t, func(ctx context.Context, in io.Reader, w io.Writer) error {
 		return Serve(ctx, e, cfg, "test", in, w)
 	})
+}
+
+// The client that opens the server receives the instructions — the hint that
+// points it at get_usage — whichever era it opens in.
+func TestOpeningCarriesTheInstructions(t *testing.T) {
+	e, cfg := newServer(t, fakeFetcher{})
+	cl := openWith(t, func(ctx context.Context, in io.Reader, w io.Writer) error {
+		return Serve(ctx, e, cfg, "test", in, w)
+	}, client.Options{})
+	if got := cl.Instructions(); got != Instructions {
+		t.Errorf("instructions = %q, want the package's Instructions", got)
+	}
 }
