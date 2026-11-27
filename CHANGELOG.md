@@ -6,6 +6,45 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **The MCP server speaks both eras of the protocol** (ADR-0001): the
+  2026-07-28 revision, whose clients probe with `server/discover`, as well as
+  the earlier `initialize` handshake (2025-11-25, 2025-06-18, 2024-11-05). The
+  protocol layer is now the organization's shared module nlink-jp/mcp
+  (organization ADR-030); the tools, their arguments and their results are
+  unchanged.
+
+### Changed
+
+- Protocol details now follow the module:
+  - `tools/list`, `tools/call` and unknown methods before `initialize` are
+    refused with -32602 (an unknown method was -32601);
+  - `arguments` that is not an object is refused with -32602 before reaching
+    the tool;
+  - a request with `"id":null`, or without `"jsonrpc":"2.0"`, gets -32600;
+  - messages are read one per line (up to 16 MiB) instead of as a JSON stream;
+  - a parse error or a batch no longer ends the server (a batch gets -32600);
+  - a panic in a tool is answered -32603 and the server goes on (it crashed);
+  - up to 256 calls wait behind a running one; more are refused with -32603
+    "server busy";
+  - `notifications/cancelled` now cancels the call.
+    A cancelled lookup still runs to its end — the engine takes no context —
+    and its answer is dropped; the cache is written whole to a temporary file
+    and renamed, so nothing partial is left.
+
+  Requests piped in are still all answered before the server exits at end of
+  input.
+- `mcp.Serve` takes a context first, cancelled by SIGINT and SIGTERM in the
+  `mcp` subcommand.
+
+### Fixed
+
+- An argument spelt in another case (`{"IP_Address": ...}`, or `Limit` of the shared arguments) was accepted as the declared one; it is now refused by name.
+- SIGINT or SIGTERM ended the MCP server by killing the process; a signal now ends it through its context, so its cleanup runs.
+- `scripts/e2e.sh` still checked the file spill retired in v0.2 (`workspace_root`, `records_file`), so it could not pass; it now checks that `workspace_root` is refused by name and that records come back inline with no file written.
+- `scripts/e2e.sh`'s "nothing indexed" check used 203.0.113.9, which the index now holds a record for; it uses 233.252.0.77 (MCAST-TEST-NET).
+
 ## [0.3.2] - 2026-11-27
 
 ### Changed

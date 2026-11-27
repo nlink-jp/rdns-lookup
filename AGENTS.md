@@ -6,7 +6,7 @@ A CLI and local MCP server that queries the free DNS index at [ip.thc.org](https
 
 **The name is a compromise and the semantics matter.** Upstream calls its main endpoint "reverse DNS", but it is not PTR — it aggregates PTR names, domains whose A records point at the address, and Certificate Transparency names. `1.1.1.1` has one PTR record and 83,216 index records. Every user-facing surface (usage text, both READMEs, `internal/mcp/usage.md`, the MCP `instructions`) states this explicitly, because a user who assumes PTR will misread every result. The sibling `doh-lookup` is the tool for the authoritative single name.
 
-Because only a third-party index is read, **no packet reaches the target under investigation** — the exact inverse of `doh-lookup`, and the reason this belongs early in a triage. Input is validated before any network I/O. Zero credentials (upstream has no authentication mechanism at all) and zero external dependencies. The relationship-breadth member of the cybersecurity-series lookup family alongside `asn-lookup`, `whois-lookup`, `abuse-lookup`, `tor-exit-lookup`, `icloud-relay-lookup`, `mac-lookup`, `doh-lookup`, and `urlscan-lookup`.
+Because only a third-party index is read, **no packet reaches the target under investigation** — the exact inverse of `doh-lookup`, and the reason this belongs early in a triage. Input is validated before any network I/O. Zero credentials (upstream has no authentication mechanism at all) and no third-party dependencies. The relationship-breadth member of the cybersecurity-series lookup family alongside `asn-lookup`, `whois-lookup`, `abuse-lookup`, `tor-exit-lookup`, `icloud-relay-lookup`, `mac-lookup`, `doh-lookup`, and `urlscan-lookup`.
 
 ## Build & test
 
@@ -19,7 +19,7 @@ make vuln            # govulncheck over the build; `make package` runs it first 
 make verify-release  # gate: notarized, fresh, runs at this version, clean linux archives (run before upload)
 ```
 
-Go 1.27.4, standard library only — `go.mod` has no `require` block. Shared code (the release scripts, `parseTOML`, `writeAtomic`, the `internal/mcp` skeleton, `internal/idn`) is vendored from sibling projects rather than imported, matching the series.
+Go 1.27.4. No third-party dependencies: the standard library, plus the organization's module `github.com/nlink-jp/mcp` for the MCP protocol (organization ADR-030; ADR-0001). Other shared code (the release scripts, `parseTOML`, `writeAtomic`, `internal/idn`) is vendored from sibling projects rather than imported, matching the series.
 
 ## Tests
 
@@ -42,7 +42,7 @@ internal/cache/              Fixed-TTL JSON-file cache, atomic writes
 internal/config/             Sectioned-TOML subset + RDNS_LOOKUP_* env
 internal/engine/             Shared core: route selection, cache, dedup, truncation, pacing
 internal/app/                CLI shell: subcommand dispatch, flags, text/JSON rendering
-internal/mcp/                Zero-dep stdio JSON-RPC 2.0 server + embedded usage.md
+internal/mcp/                MCP tools on nlink-jp/mcp's server.ToolServer (both eras; ADR-0001) + embedded usage.md
 ```
 
 ## Key design decisions
@@ -60,6 +60,15 @@ internal/mcp/                Zero-dep stdio JSON-RPC 2.0 server + embedded usage
 - **Each lookup tool decodes its own argument struct** (`rdnsArgs` / `subdomainsArgs` / `cnamesArgs`, sharing an embedded `commonArgs`). They were one union struct, which with strict decoding would have kept a hole the schemas do not have: `ip_address` sent to `lookup_subdomains` decodes into a declared field, so the decoder accepts it and the tool ignores it. Add a new argument to the tool that declares it, not to `commonArgs`, unless all three take it. Do not merge them back.
 
 ## Gotchas
+
+- **The MCP protocol is nlink-jp/mcp's** (ADR-0001, organization ADR-030 §6).
+  `internal/mcp` never handles `initialize` or `server/discover` itself: `Serve`
+  registers `toolsList()` on a `server.ToolServer` and each handler calls
+  `toolsCall`. Tests replay their requests through the module's `client`
+  (`clienttest_test.go`) and run its three probe clients; do not write the
+  handshake by hand in a test. Before initialize, `tools/*` is -32602 — the
+  module's rule, not a defect. Argument names are matched exactly
+  (`decodeArgs`, `argNames`).
 
 - **The upstream CSV header is rotated by one column.** It declares `ipAddress,apexDomain,subdomain,tld,country,city,asn,organization` while a row actually arrives as `apexDomain,subdomain,tld,country,city,asn,organization,ipAddress` — the IP is **last**, not first. Trusting the header mislabels every single field. Every CSV request therefore pins `hide_header=true` and rows are mapped positionally through `thc.csvColumns`. `TestParseCSVCorrectsRotatedHeader` guards this with real captured bytes; **never** change that mapping without re-verifying against the JSON face for the same query.
 - **`matching_records: 0` means unknown, not none.** Upstream says so in a comment for very large blocks, and the CSV face reports no total at all. Code must read `Count` for what is held and treat 0 as "could not count".

@@ -4,7 +4,7 @@
 
 不審な IP やドメインを調査するとき、最初に知りたいのは周辺の関係です。この IP に他に何が載っているか、このドメインにどんなサブドメインがあるか、誰が CNAME でここを指しているか。`dig -x` では答えられません。PTR レコードは IP の持ち主が公開した 1 つの名前であって、実際にその IP へ A レコードを向けている数万のドメインは見えないからです。`1.1.1.1` の PTR は 1 件ですが、この索引には **83,216 件**あります。rdns-lookup は [THC](https://ip.thc.org) が無料公開する 60 億レコード規模の DNS 索引を引きます。第三者の索引を読むだけなので**調査対象へパケットを一切送らず**、トリアージの初手として最も安全な手段になります。
 
-[asn-lookup](https://github.com/nlink-jp/asn-lookup)（帰属）・[whois-lookup](https://github.com/nlink-jp/whois-lookup)（登録情報）・[abuse-lookup](https://github.com/nlink-jp/abuse-lookup)（評判）・[doh-lookup](https://github.com/nlink-jp/doh-lookup)（現在の名前解決）・[urlscan-lookup](https://github.com/nlink-jp/urlscan-lookup)（URL 挙動）に並ぶ、**関係の広がり**にフォーカスした姉妹品です。**credential ゼロ・外部依存ゼロ。**
+[asn-lookup](https://github.com/nlink-jp/asn-lookup)（帰属）・[whois-lookup](https://github.com/nlink-jp/whois-lookup)（登録情報）・[abuse-lookup](https://github.com/nlink-jp/abuse-lookup)（評判）・[doh-lookup](https://github.com/nlink-jp/doh-lookup)（現在の名前解決）・[urlscan-lookup](https://github.com/nlink-jp/urlscan-lookup)（URL 挙動）に並ぶ、**関係の広がり**にフォーカスした姉妹品です。**credential ゼロ・サードパーティ製の依存なし。**
 
 > **これは PTR ではありません。** 上流は "reverse DNS" と呼びますが、実体は PTR 名・その IP へ A レコードを向けているドメイン・証明書透明性ログ由来の名前を集約した索引です。答えるのは「他に何がここにあるか」です。持ち主が公開した権威ある 1 つの名前が知りたい場合は `doh-lookup` を使ってください。
 
@@ -78,6 +78,10 @@ $ rdns-lookup rdns 142.251.43.46 --limit 4
 | 2 | エラー（不正な入力・ネットワーク障害・設定不備） |
 
 ## MCP サーバー
+
+サーバーは、プロトコルの新旧両方の時代を話します。2026-07-28 版（`server/discover` で探るクライアント）と、
+それより前の `initialize` の握手（2025-11-25・2025-06-18・2024-11-05）です。パイプで流し込んだ要求には、
+入力の終わりで終了する前にすべて答えます。
 
 ```bash
 rdns-lookup mcp

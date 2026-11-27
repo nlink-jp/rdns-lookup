@@ -4,7 +4,7 @@
 
 When you investigate a suspicious IP or domain, the first thing you want is the surrounding relationships: what else is hosted on this address, what subdomains exist under this domain, who points a CNAME at it. `dig -x` cannot tell you — the PTR record is the one name the address owner published, not the tens of thousands of domains whose A records actually point there. `1.1.1.1` has a single PTR; this index holds **83,216** records for it. rdns-lookup queries the free 6-billion-record DNS index that [THC](https://ip.thc.org) publishes, and because it only reads a third-party index, **no packet reaches the target under investigation** — making it the safest opening move in a triage.
 
-The relationship-breadth sibling of [asn-lookup](https://github.com/nlink-jp/asn-lookup) (attribution), [whois-lookup](https://github.com/nlink-jp/whois-lookup) (registration), [abuse-lookup](https://github.com/nlink-jp/abuse-lookup) (reputation), [doh-lookup](https://github.com/nlink-jp/doh-lookup) (current resolution), and [urlscan-lookup](https://github.com/nlink-jp/urlscan-lookup) (URL behaviour). **Zero credentials, zero external dependencies.**
+The relationship-breadth sibling of [asn-lookup](https://github.com/nlink-jp/asn-lookup) (attribution), [whois-lookup](https://github.com/nlink-jp/whois-lookup) (registration), [abuse-lookup](https://github.com/nlink-jp/abuse-lookup) (reputation), [doh-lookup](https://github.com/nlink-jp/doh-lookup) (current resolution), and [urlscan-lookup](https://github.com/nlink-jp/urlscan-lookup) (URL behaviour). **Zero credentials, no third-party dependencies.**
 
 > **This is not PTR.** Upstream calls it "reverse DNS", but it is an aggregate index of PTR names, domains whose A records point at the address, and names seen in Certificate Transparency logs. It answers *"what else is here"*. For the single authoritative name an owner published, use `doh-lookup`.
 
@@ -78,6 +78,11 @@ Every result states how many records upstream holds against how many were retrie
 | 2 | Error — invalid input, network failure, bad config |
 
 ## MCP server
+
+The server speaks both eras of the protocol: the 2026-07-28 revision (clients
+that probe with `server/discover`) and the earlier `initialize` handshake
+(2025-11-25, 2025-06-18, 2024-11-05). Requests piped in are all answered before
+it exits at end of input.
 
 ```bash
 rdns-lookup mcp
