@@ -190,3 +190,17 @@ func TestNonObjectArgumentsAreAProtocolError(t *testing.T) {
 		t.Errorf("array arguments: %v, want -32602", got[0])
 	}
 }
+
+// encoding/json matches names case-insensitively; the schema does not. An
+// argument spelt in another case — here one of the embedded commonArgs — is
+// refused by name.
+func TestAnArgumentInAnotherCaseIsRefused(t *testing.T) {
+	for _, args := range []string{`{"IP_Address":"1.1.1.1"}`, `{"ip_address":"1.1.1.1","Limit":3}`} {
+		e, cfg := newServer(t, pageFetcher())
+		text, isErr := toolText(t, drive(t, e, cfg, call("lookup_rdns", args))[0])
+		_, msg := structuredError(t, text)
+		if !isErr || !strings.Contains(msg, "unknown field") {
+			t.Errorf("%s was accepted: %s", args, text)
+		}
+	}
+}
