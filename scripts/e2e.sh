@@ -94,8 +94,11 @@ if [ $C -eq 0 ] \
    && echo "$OUT" | grep -q '"duplicates_removed"'; then OK=1; else OK=0; fi
 report "$OK" "JSON output includes source, upstream total, truncation, dupes" "exit=$C; $OUT"
 
-# 8. nothing indexed -> exit 1 (a real answer, not a failure)
-OUT=$("$BIN" rdns --refresh --limit 5 203.0.113.9 2>&1); C=$?
+# 8. nothing indexed -> exit 1 (a real answer, not a failure). The address is
+# MCAST-TEST-NET (RFC 5771): the index holds no record for it (2026-11-28),
+# where the documentation ranges (192.0.2.0/24 and the others) gained some —
+# anyone can point an A record anywhere. Re-check upstream if this fails.
+OUT=$("$BIN" rdns --refresh --limit 5 233.252.0.77 2>&1); C=$?
 if [ $C -eq 1 ] && echo "$OUT" | grep -q "nothing indexed"; then OK=1; else OK=0; fi
 report "$OK" "an unindexed address exits 1 and says nothing was indexed" "exit=$C; $OUT"
 
@@ -126,6 +129,11 @@ OUT=$("$BIN" cache status 2>&1); C=$?
 if [ $C -eq 0 ] && echo "$OUT" | grep -q "ttl:" && echo "$OUT" | grep -q "ip.thc.org"; then OK=1; else OK=0; fi
 report "$OK" "cache status reports the TTL and data source" "exit=$C; $OUT"
 
+# Every MCP session opens with initialize, as a legacy-era client does: these
+# printf streams are the peer's stand-in (ADR-030 §6), and tools/* before
+# initialize is refused.
+INIT='{"jsonrpc":"2.0","id":0,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"e2e","version":"0"}}}'
+
 # 14. MCP stdio round-trip: initialize, every tool advertised, a real lookup
 REQ='{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18"}}
 {"jsonrpc":"2.0","method":"notifications/initialized"}
@@ -138,17 +146,24 @@ if echo "$OUT" | grep -q '"name":"rdns-lookup"' \
    && echo "$OUT" | grep -q 'ip.thc.org'; then OK=1; else OK=0; fi
 report "$OK" "MCP initialize + tools/list + lookup_rdns round-trip" "$OUT"
 
-# 15. MCP spills a large result to a file instead of flooding the caller
+# 15. MCP returns every retrieved record inline and writes no file
 mkdir -p "$WS"
-REQ='{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_rdns","arguments":{"ip_address":"'$IP'","all":true,"refresh":true,"workspace_root":"'$WS'"}}}'
-OUT=$(printf '%s\n' "$REQ" | RDNS_LOOKUP_MCP_INLINE_MAX=10 "$BIN" mcp 2>/dev/null)
-FILES=$(ls -1 "$WS"/*.jsonl 2>/dev/null | wc -l | tr -d ' ')
-LINES=$(cat "$WS"/*.jsonl 2>/dev/null | wc -l | tr -d ' ')
-if echo "$OUT" | grep -q 'records_file' && [ "$FILES" -eq 1 ] && [ "$LINES" -gt 10 ]; then OK=1; else OK=0; fi
-report "$OK" "MCP writes a large result to a JSONL file under workspace_root" "files=$FILES lines=$LINES; $OUT"
+REQ="$INIT"'
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_rdns","arguments":{"ip_address":"'$IP'","limit":20,"refresh":true,"workspace_root":"'$WS'"}}}'
+OUT=$(cd "$WS" && printf '%s\n' "$REQ" | "$BIN" mcp 2>/dev/null)
+FILES=$(find "$WS" -type f | wc -l | tr -d ' ')
+if echo "$OUT" | grep -q 'unknown field' && echo "$OUT" | grep -q 'workspace_root' && [ "$FILES" -eq 0 ]; then OK=1; else OK=0; fi
+report "$OK" "MCP refuses the retired workspace_root by name and writes no file" "files=$FILES; $OUT"
+REQ="$INIT"'
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_rdns","arguments":{"ip_address":"'$IP'","limit":20}}}'
+OUT=$(cd "$WS" && printf '%s\n' "$REQ" | "$BIN" mcp 2>/dev/null)
+FILES=$(find "$WS" -type f | wc -l | tr -d ' ')
+if echo "$OUT" | grep -q '\\"records\\"' && ! echo "$OUT" | grep -q 'records_file' && [ "$FILES" -eq 0 ]; then OK=1; else OK=0; fi
+report "$OK" "MCP returns the records inline and writes no file" "files=$FILES; $OUT"
 
 # 16. MCP reports a bad target as a structured tool error
-REQ='{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_rdns","arguments":{"ip_address":"142.251.43.0/25"}}}'
+REQ="$INIT"'
+{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"lookup_rdns","arguments":{"ip_address":"142.251.43.0/25"}}}'
 OUT=$(printf '%s\n' "$REQ" | "$BIN" mcp 2>/dev/null)
 if echo "$OUT" | grep -q '"isError":true' && echo "$OUT" | grep -q 'invalid_input'; then OK=1; else OK=0; fi
 report "$OK" "MCP returns a structured invalid_input error for a /25 block" "$OUT"
